@@ -1,0 +1,32 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #333; }
+
+header { background: #003b6f; color: white; padding: 16px 24px; }
+header h1 { font-size: 1.4rem; margin-bottom: 6px; }
+.meta { font-size: 0.85rem; opacity: 0.8; margin-bottom: 10px; }
+.error-tag { background: #e53e3e; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; }
+
+.btn { background: white; color: #003b6f; border: none; padding: 6px 14px;
+       border-radius: 4px; cursor: pointer; font-size: 0.9rem; text-decoration: none;
+       display: inline-block; }
+.btn:hover { background: #e8f0fe; }
+
+.tabs { display: flex; gap: 4px; padding: 12px 24px 0; background: #e8edf2; }
+.tab-btn { padding: 8px 20px; border: none; background: #cdd8e3;
+           border-radius: 6px 6px 0 0; cursor: pointer; font-size: 0.95rem; }
+.tab-btn.active { background: white; font-weight: 600; }
+
+.tab-content { display: none; background: white; padding: 16px 24px; }
+.tab-content.active { display: block; }
+
+.tab-actions { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th { text-align: left; padding: 8px 12px; background: #f0f4f8;
+     border-bottom: 2px solid #d0d7de; }
+td { padding: 8px 12px; border-bottom: 1px solid #e8ecf0; }
+tr:hover td { background: #f8fafc; }
+
+.new-badge { background: #38a169; color: white; font-size: 0.7rem;
+             padding: 2px 6px; border-radius: 10px; font-weight: 700; }
+a { color: #003b6f; }
