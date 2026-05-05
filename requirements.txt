@@ -1,0 +1,6 @@
+scrapegraphai
+openai
+flask
+python-dotenv
+pytest
+playwright
