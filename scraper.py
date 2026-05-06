@@ -1,4 +1,3 @@
-import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
@@ -86,39 +85,6 @@ def fetch_placed_on(url):
     return None
 
 
-def _notify(new_jobs):
-    topic = os.environ.get("NTFY_TOPIC", "").strip()
-    if not topic:
-        print("[notify] NTFY_TOPIC not set — skipping")
-        return
-    if not new_jobs:
-        print("[notify] No new jobs — skipping")
-        return
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    todays_jobs = [j for j in new_jobs if j.get("placed_on") == today]
-    print(f"[notify] {len(new_jobs)} new jobs total, {len(todays_jobs)} placed today ({today})")
-    if not todays_jobs:
-        return
-    titles = [j.get("title", "Unknown") for j in todays_jobs[:5]]
-    body = "\n".join(titles)
-    if len(todays_jobs) > 5:
-        body += f"\n…and {len(todays_jobs) - 5} more"
-    try:
-        requests.post(
-            f"https://ntfy.sh/{topic}",
-            data=body.encode("utf-8"),
-            headers={
-                "Title": f"{len(todays_jobs)} new Bath job{'s' if len(todays_jobs) > 1 else ''} placed today",
-                "Priority": "default",
-                "Tags": "mortar_board",
-            },
-            timeout=10,
-        )
-        print(f"[notify] Sent notification for {len(todays_jobs)} jobs")
-    except Exception as e:
-        print(f"[notify] Failed to send: {e}")
-
-
 def run():
     db.init_db()
     now = datetime.utcnow().isoformat()
@@ -132,12 +98,10 @@ def run():
             for future, idx in future_to_idx.items():
                 jobs[idx]["placed_on"] = future.result()
         with db.get_conn() as conn:
-            results = [(job, db.upsert_job(conn, job, now)) for job in jobs]
-            new_jobs = [job for job, is_new in results if is_new]
+            new_count = sum(db.upsert_job(conn, job, now) for job in jobs)
             db.mark_stale(conn, cutoff)
             db.log_run(conn, now, len(jobs), "success")
-        _notify(new_jobs)
-        print(f"[{now}] Scraped {len(jobs)} jobs ({len(new_jobs)} new)")
+        print(f"[{now}] Scraped {len(jobs)} jobs ({new_count} new)")
     except Exception as e:
         with db.get_conn() as conn:
             db.log_run(conn, now, 0, "error", str(e))

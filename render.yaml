@@ -4,7 +4,5 @@ services:
     runtime: docker
     plan: free
     envVars:
-      - key: NTFY_TOPIC
-        sync: false
       - key: SCRAPE_TOKEN
         sync: false

@@ -23,6 +23,7 @@ def fmt_date(value):
     except Exception:
         return value
 
+
 SCRAPER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scraper.py")
 
 
@@ -41,7 +42,6 @@ def _fmt_time(iso_str):
     if not iso_str:
         return "—"
     try:
-        # stored as naive UTC — attach UTC tzinfo before converting to local
         dt_local = datetime.fromisoformat(iso_str).replace(tzinfo=timezone.utc).astimezone()
         return dt_local.strftime("%d %b %Y, %H:%M")
     except Exception:
@@ -128,33 +128,6 @@ def run_scraper():
     return redirect(url_for("index"))
 
 
-@app.route("/api/debug")
-def api_debug():
-    with db.get_conn() as conn:
-        rows = conn.execute(
-            "SELECT placed_on, count(*) as n FROM jobs WHERE active=1 GROUP BY placed_on ORDER BY placed_on DESC"
-        ).fetchall()
-    return {"placed_on_distribution": [{"date": r["placed_on"], "count": r["n"]} for r in rows]}
-
-
-@app.route("/api/test-notify")
-def api_test_notify():
-    import requests as req
-    topic = os.environ.get("NTFY_TOPIC", "").strip()
-    if not topic:
-        return {"error": "NTFY_TOPIC not set on this server"}, 500
-    try:
-        req.post(
-            f"https://ntfy.sh/{topic}",
-            data=b"Test notification from Bath Jobs",
-            headers={"Title": "Bath Jobs test", "Tags": "white_check_mark"},
-            timeout=10,
-        )
-        return {"status": "sent", "topic": topic}, 200
-    except Exception as e:
-        return {"error": str(e)}, 500
-
-
 @app.route("/api/scrape", methods=["POST"])
 def api_scrape():
     token = request.headers.get("X-Scrape-Token", "")
@@ -177,5 +150,4 @@ def api_scrape():
 
 
 if __name__ == "__main__":
-    db.init_db()
     app.run(debug=False, port=5000)
