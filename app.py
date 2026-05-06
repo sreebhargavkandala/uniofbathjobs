@@ -127,6 +127,24 @@ def run_scraper():
     return redirect(url_for("index"))
 
 
+@app.route("/api/test-notify")
+def api_test_notify():
+    import requests as req
+    topic = os.environ.get("NTFY_TOPIC", "").strip()
+    if not topic:
+        return {"error": "NTFY_TOPIC not set on this server"}, 500
+    try:
+        req.post(
+            f"https://ntfy.sh/{topic}",
+            data=b"Test notification from Bath Jobs",
+            headers={"Title": "Bath Jobs test", "Tags": "white_check_mark"},
+            timeout=10,
+        )
+        return {"status": "sent", "topic": topic}, 200
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
 @app.route("/api/scrape", methods=["POST"])
 def api_scrape():
     token = request.headers.get("X-Scrape-Token", "")

@@ -88,10 +88,15 @@ def fetch_placed_on(url):
 
 def _notify(new_jobs):
     topic = os.environ.get("NTFY_TOPIC", "").strip()
-    if not topic or not new_jobs:
+    if not topic:
+        print("[notify] NTFY_TOPIC not set — skipping")
+        return
+    if not new_jobs:
+        print("[notify] No new jobs — skipping")
         return
     today = datetime.utcnow().strftime("%Y-%m-%d")
     todays_jobs = [j for j in new_jobs if j.get("placed_on") == today]
+    print(f"[notify] {len(new_jobs)} new jobs total, {len(todays_jobs)} placed today ({today})")
     if not todays_jobs:
         return
     titles = [j.get("title", "Unknown") for j in todays_jobs[:5]]
@@ -109,8 +114,9 @@ def _notify(new_jobs):
             },
             timeout=10,
         )
-    except Exception:
-        pass
+        print(f"[notify] Sent notification for {len(todays_jobs)} jobs")
+    except Exception as e:
+        print(f"[notify] Failed to send: {e}")
 
 
 def run():
