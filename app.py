@@ -128,6 +128,15 @@ def run_scraper():
     return redirect(url_for("index"))
 
 
+@app.route("/api/debug")
+def api_debug():
+    with db.get_conn() as conn:
+        rows = conn.execute(
+            "SELECT placed_on, count(*) as n FROM jobs WHERE active=1 GROUP BY placed_on ORDER BY placed_on DESC"
+        ).fetchall()
+    return {"placed_on_distribution": [{"date": r["placed_on"], "count": r["n"]} for r in rows]}
+
+
 @app.route("/api/test-notify")
 def api_test_notify():
     import requests as req
