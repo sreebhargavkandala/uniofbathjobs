@@ -4,6 +4,9 @@ import os
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+_LONDON = ZoneInfo("Europe/London")
 
 from flask import Flask, render_template, send_file, redirect, url_for, flash, request
 
@@ -28,7 +31,7 @@ SCRAPER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scraper
 
 
 def _next_scrape():
-    now = datetime.now()
+    now = datetime.now(_LONDON)
     candidates = [
         now.replace(hour=6, minute=0, second=0, microsecond=0),
         now.replace(hour=18, minute=0, second=0, microsecond=0),
@@ -42,8 +45,8 @@ def _fmt_time(iso_str):
     if not iso_str:
         return "—"
     try:
-        dt_local = datetime.fromisoformat(iso_str).replace(tzinfo=timezone.utc).astimezone()
-        return dt_local.strftime("%d %b %Y, %H:%M")
+        dt = datetime.fromisoformat(iso_str).replace(tzinfo=timezone.utc).astimezone(_LONDON)
+        return dt.strftime("%d %b %Y, %H:%M")
     except Exception:
         return iso_str
 
