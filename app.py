@@ -11,6 +11,7 @@ import db
 
 app = Flask(__name__)
 app.secret_key = "bathjobs-local"
+db.init_db()
 
 
 @app.template_filter("fmt_date")
