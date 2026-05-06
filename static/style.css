@@ -30,3 +30,21 @@ tr:hover td { background: #f8fafc; }
 .new-badge { background: #38a169; color: white; font-size: 0.7rem;
              padding: 2px 6px; border-radius: 10px; font-weight: 700; }
 a { color: #003b6f; }
+
+.loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                   background: rgba(0,0,0,0.6); display: flex; align-items: center;
+                   justify-content: center; z-index: 1000; }
+.loading-content { text-align: center; color: white; }
+.loading-content p { margin-top: 14px; font-size: 1rem; }
+.loading-sub { opacity: 0.7; font-size: 0.85rem !important; margin-top: 6px !important; }
+.spinner { width: 48px; height: 48px; border: 5px solid rgba(255,255,255,0.3);
+           border-top-color: white; border-radius: 50%;
+           animation: spin 0.8s linear infinite; margin: 0 auto; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.flash { display: flex; justify-content: space-between; align-items: center;
+         padding: 12px 24px; font-size: 0.95rem; }
+.flash-success { background: #c6f6d5; color: #276749; }
+.flash-error   { background: #fed7d7; color: #9b2c2c; }
+.flash-close { background: none; border: none; font-size: 1.1rem;
+               cursor: pointer; color: inherit; padding: 0 4px; }
