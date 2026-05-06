@@ -54,8 +54,6 @@ def get_conn(db_path=None):
 def _normalize_url(url):
     if not url:
         return url
-    # Lowercase the scheme+host+path; preserve query string casing for ref values
-    # bath.ac.uk paths are case-insensitive so lowercasing the whole URL is safe
     return url.strip().lower()
 
 
