@@ -5,7 +5,7 @@ import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 
-from flask import Flask, render_template, send_file, redirect, url_for, flash
+from flask import Flask, render_template, send_file, redirect, url_for, flash, request
 
 import db
 
@@ -125,6 +125,27 @@ def run_scraper():
         last_line = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else "unknown error"
         flash(f"Scrape failed: {last_line}", "error")
     return redirect(url_for("index"))
+
+
+@app.route("/api/scrape", methods=["POST"])
+def api_scrape():
+    token = request.headers.get("X-Scrape-Token", "")
+    expected = os.environ.get("SCRAPE_TOKEN", "")
+    if expected and token != expected:
+        return {"error": "unauthorized"}, 401
+    project_dir = os.path.dirname(SCRAPER_PATH)
+    try:
+        result = subprocess.run(
+            [sys.executable, SCRAPER_PATH],
+            capture_output=True, text=True,
+            cwd=project_dir, timeout=180,
+        )
+    except subprocess.TimeoutExpired:
+        return {"error": "timed out"}, 504
+    if result.returncode == 0:
+        return {"status": "ok"}, 200
+    last_line = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else "unknown"
+    return {"error": last_line}, 500
 
 
 if __name__ == "__main__":
