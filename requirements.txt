@@ -1,6 +1,5 @@
-scrapegraphai
-openai
 flask
-python-dotenv
+requests
+beautifulsoup4
+gunicorn
 pytest
-playwright

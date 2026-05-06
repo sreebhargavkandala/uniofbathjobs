@@ -90,16 +90,20 @@ def _notify(new_jobs):
     topic = os.environ.get("NTFY_TOPIC", "").strip()
     if not topic or not new_jobs:
         return
-    titles = [j.get("title", "Unknown") for j in new_jobs[:5]]
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    todays_jobs = [j for j in new_jobs if j.get("placed_on") == today]
+    if not todays_jobs:
+        return
+    titles = [j.get("title", "Unknown") for j in todays_jobs[:5]]
     body = "\n".join(titles)
-    if len(new_jobs) > 5:
-        body += f"\n…and {len(new_jobs) - 5} more"
+    if len(todays_jobs) > 5:
+        body += f"\n…and {len(todays_jobs) - 5} more"
     try:
         requests.post(
             f"https://ntfy.sh/{topic}",
             data=body.encode("utf-8"),
             headers={
-                "Title": f"{len(new_jobs)} new Bath job{'s' if len(new_jobs) > 1 else ''} posted",
+                "Title": f"{len(todays_jobs)} new Bath job{'s' if len(todays_jobs) > 1 else ''} placed today",
                 "Priority": "default",
                 "Tags": "mortar_board",
             },

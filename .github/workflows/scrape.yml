@@ -4,31 +4,15 @@ on:
   schedule:
     - cron: '0 6 * * *'   # 6am UTC — 7am BST (summer) / 6am GMT (winter)
     - cron: '0 17 * * *'  # 5pm UTC — 6pm BST (summer) / 5pm GMT (winter)
-  workflow_dispatch:       # also allows manual trigger from GitHub UI
+  workflow_dispatch:
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Restore jobs DB from cache
-        uses: actions/cache@v4
-        with:
-          path: jobs.db
-          key: jobs-db-${{ github.run_id }}
-          restore-keys: |
-            jobs-db-
-
-      - name: Run scraper
-        run: python scraper.py
+      - name: Run scraper on Fly.io
+        run: fly ssh console -a uniofbathjobs -C "cd /app && python scraper.py"
         env:
-          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
