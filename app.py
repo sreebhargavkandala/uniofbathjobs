@@ -103,7 +103,7 @@ def run_scraper():
     project_dir = os.path.dirname(SCRAPER_PATH)
 
     with db.get_conn() as conn:
-        before = conn.execute("SELECT count(*) FROM jobs WHERE active=1").fetchone()[0]
+        before = db.count_active_jobs(conn)
 
     try:
         result = subprocess.run(
@@ -117,7 +117,7 @@ def run_scraper():
 
     if result.returncode == 0:
         with db.get_conn() as conn:
-            after = conn.execute("SELECT count(*) FROM jobs WHERE active=1").fetchone()[0]
+            after = db.count_active_jobs(conn)
             last = db.get_last_run(conn)
         total = last["jobs_found"] if last else 0
         new_count = max(0, after - before)
