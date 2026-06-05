@@ -53,7 +53,7 @@ def _fmt_time(iso_str):
 
 @app.route("/")
 def index():
-    cutoff_24h = (datetime.utcnow() - timedelta(hours=24)).isoformat()
+    cutoff_24h = datetime.utcnow() - timedelta(hours=24)
     with db.get_conn() as conn:
         full_time = db.get_jobs(conn, "full-time")
         part_time = db.get_jobs(conn, "part-time")
