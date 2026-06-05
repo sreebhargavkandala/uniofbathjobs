@@ -4,3 +4,4 @@ beautifulsoup4
 gunicorn
 tzdata
 pytest
+psycopg2-binary
