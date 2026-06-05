@@ -1,18 +1,17 @@
-import sqlite3
 import os
+import psycopg2
+import psycopg2.extras
 from contextlib import contextmanager
 
-_data_dir = os.environ.get("DATA_DIR", os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(_data_dir, "jobs.db")
+_DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 
-def init_db(db_path=None):
-    if db_path is None:
-        db_path = DB_PATH
-    with get_conn(db_path) as conn:
-        conn.executescript("""
+def init_db():
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("""
             CREATE TABLE IF NOT EXISTS jobs (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                id          SERIAL PRIMARY KEY,
                 title       TEXT NOT NULL,
                 department  TEXT,
                 type        TEXT NOT NULL,
@@ -20,30 +19,35 @@ def init_db(db_path=None):
                 deadline    TEXT,
                 placed_on   TEXT,
                 url         TEXT UNIQUE NOT NULL,
-                first_seen  DATETIME NOT NULL,
-                last_seen   DATETIME NOT NULL,
-                active      BOOLEAN NOT NULL DEFAULT 1
-            );
+                first_seen  TIMESTAMP NOT NULL,
+                last_seen   TIMESTAMP NOT NULL,
+                active      BOOLEAN NOT NULL DEFAULT TRUE
+            )
+        """)
+        cur.execute("""
             CREATE TABLE IF NOT EXISTS scrape_log (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                run_at      DATETIME NOT NULL,
+                id          SERIAL PRIMARY KEY,
+                run_at      TIMESTAMP NOT NULL,
                 jobs_found  INTEGER,
                 status      TEXT,
                 error_msg   TEXT
-            );
+            )
         """)
-        try:
-            conn.execute("ALTER TABLE jobs ADD COLUMN placed_on TEXT")
-        except sqlite3.OperationalError:
-            pass  # column already exists
+        cur.execute("""
+            DO $$
+            BEGIN
+                ALTER TABLE jobs ADD COLUMN placed_on TEXT;
+            EXCEPTION WHEN duplicate_column THEN NULL;
+            END $$;
+        """)
 
 
 @contextmanager
-def get_conn(db_path=None):
-    if db_path is None:
-        db_path = DB_PATH
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+def get_conn():
+    conn = psycopg2.connect(
+        _DATABASE_URL,
+        cursor_factory=psycopg2.extras.RealDictCursor,
+    )
     try:
         yield conn
         conn.commit()
@@ -59,47 +63,59 @@ def _normalize_url(url):
 
 def upsert_job(conn, job, now):
     url = _normalize_url(job.get("url"))
-    existing = conn.execute(
-        "SELECT id, placed_on FROM jobs WHERE url = ?", (url,)
-    ).fetchone()
+    cur = conn.cursor()
+    cur.execute("SELECT id, placed_on FROM jobs WHERE url = %s", (url,))
+    existing = cur.fetchone()
     if existing:
         placed_on = job.get("placed_on") or (existing["placed_on"] if existing else None)
-        conn.execute(
-            "UPDATE jobs SET last_seen = ?, active = 1, placed_on = ? WHERE url = ?",
-            (now, placed_on, url)
+        cur.execute(
+            "UPDATE jobs SET last_seen = %s, active = TRUE, placed_on = %s WHERE url = %s",
+            (now, placed_on, url),
         )
         return False
-    conn.execute(
-        """INSERT INTO jobs (title, department, type, salary, deadline, placed_on, url, first_seen, last_seen, active)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)""",
+    cur.execute(
+        """INSERT INTO jobs
+               (title, department, type, salary, deadline, placed_on, url, first_seen, last_seen, active)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)""",
         (
             job.get("title"), job.get("department"), job.get("type"),
-            job.get("salary"), job.get("deadline"), job.get("placed_on"), url, now, now
-        )
+            job.get("salary"), job.get("deadline"), job.get("placed_on"),
+            url, now, now,
+        ),
     )
     return True
 
 
 def mark_stale(conn, cutoff):
-    conn.execute("UPDATE jobs SET active = 0 WHERE last_seen < ?", (cutoff,))
+    cur = conn.cursor()
+    cur.execute("UPDATE jobs SET active = FALSE WHERE last_seen < %s", (cutoff,))
 
 
 def log_run(conn, run_at, jobs_found, status, error_msg=None):
-    conn.execute(
-        "INSERT INTO scrape_log (run_at, jobs_found, status, error_msg) VALUES (?, ?, ?, ?)",
-        (run_at, jobs_found, status, error_msg)
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO scrape_log (run_at, jobs_found, status, error_msg) VALUES (%s, %s, %s, %s)",
+        (run_at, jobs_found, status, error_msg),
     )
 
 
 def get_jobs(conn, job_type):
-    return conn.execute(
-        """SELECT * FROM jobs WHERE type = ? AND active = 1
+    cur = conn.cursor()
+    cur.execute(
+        """SELECT * FROM jobs WHERE type = %s AND active = TRUE
            ORDER BY placed_on IS NULL, placed_on DESC, first_seen DESC""",
-        (job_type,)
-    ).fetchall()
+        (job_type,),
+    )
+    return cur.fetchall()
 
 
 def get_last_run(conn):
-    return conn.execute(
-        "SELECT * FROM scrape_log ORDER BY run_at DESC LIMIT 1"
-    ).fetchone()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM scrape_log ORDER BY run_at DESC LIMIT 1")
+    return cur.fetchone()
+
+
+def count_active_jobs(conn):
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) AS cnt FROM jobs WHERE active = TRUE")
+    return cur.fetchone()["cnt"]
