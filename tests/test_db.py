@@ -1,76 +1,75 @@
 import pytest
-from datetime import datetime, timedelta
+from unittest.mock import MagicMock
 import db
 
 
-@pytest.fixture
-def tmp_db(tmp_path):
-    path = str(tmp_path / "test.db")
-    db.init_db(path)
-    return path
+def _mock_conn(fetchone_return=None, fetchall_return=None):
+    """Return (conn, cursor) mocks. cursor.fetchone/fetchall return given values."""
+    cursor = MagicMock()
+    cursor.fetchone.return_value = fetchone_return
+    cursor.fetchall.return_value = fetchall_return or []
+    conn = MagicMock()
+    conn.cursor.return_value = cursor
+    return conn, cursor
 
 
-def test_init_creates_tables(tmp_db):
-    with db.get_conn(tmp_db) as conn:
-        tables = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
-    names = {t["name"] for t in tables}
-    assert "jobs" in names
-    assert "scrape_log" in names
-
-
-def test_upsert_new_job_returns_true(tmp_db):
+def test_upsert_new_job_returns_true():
+    conn, cursor = _mock_conn(fetchone_return=None)
     job = {
         "title": "Lab Assistant", "department": "Chemistry",
         "type": "part-time", "salary": "£12/hr",
-        "deadline": "2026-06-01", "url": "https://bath.ac.uk/job/1"
+        "deadline": "2026-06-01", "url": "https://bath.ac.uk/job/1",
     }
-    now = datetime.utcnow().isoformat()
-    with db.get_conn(tmp_db) as conn:
-        is_new = db.upsert_job(conn, job, now)
-    assert is_new is True
+    result = db.upsert_job(conn, job, "2026-06-01T10:00:00")
+    assert result is True
 
 
-def test_upsert_existing_job_returns_false(tmp_db):
+def test_upsert_existing_job_returns_false():
+    conn, cursor = _mock_conn(fetchone_return={"id": 1, "placed_on": None})
     job = {
         "title": "Lab Assistant", "department": "Chemistry",
-        "type": "part-time", "salary": "£12/hr",
-        "deadline": "2026-06-01", "url": "https://bath.ac.uk/job/1"
+        "type": "part-time", "url": "https://bath.ac.uk/job/1",
     }
-    now = datetime.utcnow().isoformat()
-    with db.get_conn(tmp_db) as conn:
-        db.upsert_job(conn, job, now)
-        is_new = db.upsert_job(conn, job, now)
-    assert is_new is False
+    result = db.upsert_job(conn, job, "2026-06-01T10:00:00")
+    assert result is False
 
 
-def test_get_jobs_filters_by_type(tmp_db):
-    now = datetime.utcnow().isoformat()
-    with db.get_conn(tmp_db) as conn:
-        db.upsert_job(conn, {"title": "A", "type": "full-time", "url": "https://bath.ac.uk/1"}, now)
-        db.upsert_job(conn, {"title": "B", "type": "part-time", "url": "https://bath.ac.uk/2"}, now)
-        full = db.get_jobs(conn, "full-time")
-        part = db.get_jobs(conn, "part-time")
-    assert len(full) == 1 and full[0]["title"] == "A"
-    assert len(part) == 1 and part[0]["title"] == "B"
+def test_get_jobs_queries_correct_type():
+    conn, cursor = _mock_conn(fetchall_return=[])
+    db.get_jobs(conn, "full-time")
+    sql, params = cursor.execute.call_args[0]
+    assert "%s" in sql
+    assert params == ("full-time",)
 
 
-def test_mark_stale_deactivates_old_jobs(tmp_db):
-    old_ts = (datetime.utcnow() - timedelta(hours=50)).isoformat()
-    cutoff = (datetime.utcnow() - timedelta(hours=48)).isoformat()
-    with db.get_conn(tmp_db) as conn:
-        db.upsert_job(conn, {"title": "Old", "type": "part-time", "url": "https://bath.ac.uk/old"}, old_ts)
-        conn.execute("UPDATE jobs SET last_seen = ? WHERE url = ?", (old_ts, "https://bath.ac.uk/old"))
-        db.mark_stale(conn, cutoff)
-        jobs = db.get_jobs(conn, "part-time")
-    assert len(jobs) == 0
+def test_mark_stale_uses_cutoff():
+    conn, cursor = _mock_conn()
+    cutoff = "2026-06-01T00:00:00"
+    db.mark_stale(conn, cutoff)
+    sql, params = cursor.execute.call_args[0]
+    assert "active" in sql.lower()
+    assert params == (cutoff,)
 
 
-def test_log_run_and_get_last_run(tmp_db):
-    now = datetime.utcnow().isoformat()
-    with db.get_conn(tmp_db) as conn:
-        db.log_run(conn, now, 5, "success")
-        last = db.get_last_run(conn)
-    assert last["jobs_found"] == 5
-    assert last["status"] == "success"
+def test_log_run_inserts_record():
+    conn, cursor = _mock_conn()
+    db.log_run(conn, "2026-06-01T10:00:00", 42, "success")
+    sql, params = cursor.execute.call_args[0]
+    assert "scrape_log" in sql.lower()
+    assert 42 in params
+    assert "success" in params
+
+
+def test_get_last_run_returns_row():
+    expected = {"id": 1, "jobs_found": 5, "status": "success",
+                "run_at": "2026-06-01T10:00:00", "error_msg": None}
+    conn, cursor = _mock_conn(fetchone_return=expected)
+    result = db.get_last_run(conn)
+    assert result["jobs_found"] == 5
+    assert result["status"] == "success"
+
+
+def test_count_active_jobs_returns_integer():
+    conn, cursor = _mock_conn(fetchone_return={"cnt": 7})
+    result = db.count_active_jobs(conn)
+    assert result == 7
