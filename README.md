@@ -20,7 +20,7 @@ Hosted on Render: **https://uniofbathjobs.onrender.com**
 | Layer | Technology |
 |---|---|
 | Scraper | Python · requests · BeautifulSoup4 |
-| Database | SQLite |
+| Database | PostgreSQL (psycopg2) |
 | Dashboard | Flask · gunicorn |
 | Hosting | Render (free tier) |
 | Scheduler | GitHub Actions cron |
@@ -41,6 +41,7 @@ cd uniofbathjobs
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+export DATABASE_URL=postgresql://localhost/bathjobs   # points at a local Postgres db
 python app.py
 ```
 
@@ -61,8 +62,9 @@ To install the local macOS scheduler (6am and 6pm daily via launchd):
 ## Deployment (Render)
 
 1. Connect this repo to [Render](https://render.com) as a new Web Service — it will detect `render.yaml` automatically
-2. Set the following environment variables in the Render dashboard:
+2. Add a Render PostgreSQL database and set the following environment variables in the Render dashboard:
    - `SCRAPE_TOKEN` — any secret string, used to authenticate the GitHub Actions trigger
+   - `DATABASE_URL` — connection string for the Postgres database
 
 ## GitHub Actions Setup
 
@@ -73,7 +75,7 @@ Add these secrets to the repository (`Settings → Secrets and variables → Act
 | `SCRAPE_TOKEN` | Same value set in Render |
 | `RENDER_URL` | `https://uniofbathjobs.onrender.com` |
 
-The workflow can also be triggered manually from the Actions tab.
+The workflow can also be triggered manually from the Actions tab. A monthly no-op commit (1st of the month, 3am UTC) keeps the schedule from being disabled by GitHub's 60-day inactivity rule.
 
 ## Running Tests
 
