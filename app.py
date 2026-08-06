@@ -31,14 +31,12 @@ SCRAPER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scraper
 
 
 def _next_scrape():
-    now = datetime.now(_LONDON)
-    candidates = [
-        now.replace(hour=6, minute=0, second=0, microsecond=0),
-        now.replace(hour=18, minute=0, second=0, microsecond=0),
-    ]
+    # Mirrors the cron in .github/workflows/scrape.yml, which is UTC.
+    now = datetime.now(timezone.utc)
+    candidates = [now.replace(hour=h, minute=0, second=0, microsecond=0) for h in (6, 17)]
     future = [t for t in candidates if t > now]
     target = future[0] if future else candidates[0] + timedelta(days=1)
-    return target.strftime("%H:%M, %d %b")
+    return target.astimezone(_LONDON).strftime("%H:%M, %d %b")
 
 
 def _fmt_time(iso_str):

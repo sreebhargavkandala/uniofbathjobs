@@ -4,13 +4,30 @@ on:
   schedule:
     - cron: '0 6 * * *'   # 6am UTC — 7am BST (summer) / 6am GMT (winter)
     - cron: '0 17 * * *'  # 5pm UTC — 6pm BST (summer) / 5pm GMT (winter)
+    - cron: '0 3 1 * *'   # monthly keepalive only — see below
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
     steps:
+      # GitHub disables scheduled workflows after 60 days of repo inactivity.
+      # An empty commit once a month resets that clock.
+      - uses: actions/checkout@v4
+        if: github.event.schedule == '0 3 1 * *'
+      - name: Keepalive commit
+        if: github.event.schedule == '0 3 1 * *'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git commit --allow-empty -m 'chore: keepalive'
+          git push
+
       - name: Trigger scrape on Render
+        if: github.event.schedule != '0 3 1 * *'
         run: |
           curl -f -s --max-time 300 \
             -X POST \
