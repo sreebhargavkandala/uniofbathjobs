@@ -39,14 +39,11 @@ def _next_scrape():
     return target.astimezone(_LONDON).strftime("%H:%M, %d %b")
 
 
-def _fmt_time(iso_str):
-    if not iso_str:
+def _fmt_time(value):
+    # psycopg2 hands back TIMESTAMP as a naive UTC datetime, not an ISO string.
+    if not value:
         return "—"
-    try:
-        dt = datetime.fromisoformat(iso_str).replace(tzinfo=timezone.utc).astimezone(_LONDON)
-        return dt.strftime("%d %b %Y, %H:%M")
-    except Exception:
-        return iso_str
+    return value.replace(tzinfo=timezone.utc).astimezone(_LONDON).strftime("%d %b %Y, %H:%M")
 
 
 @app.route("/")
@@ -102,6 +99,13 @@ def run_scraper():
 
     with db.get_conn() as conn:
         before = db.count_active_jobs(conn)
+        last = db.get_last_run(conn)
+
+    # This button is public and each press forks a scraper process. Without a
+    # cooldown, repeated presses OOM the 512MB dyno and hammer bath.ac.uk.
+    if last and (datetime.utcnow() - last["run_at"]).total_seconds() < 60:
+        flash("A scrape just ran — try again in a minute.", "error")
+        return redirect(url_for("index"))
 
     try:
         result = subprocess.run(

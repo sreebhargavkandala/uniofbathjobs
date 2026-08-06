@@ -14,7 +14,7 @@ def _mock_conn(fetchone_return=None, fetchall_return=None):
 
 
 def test_upsert_new_job_returns_true():
-    conn, cursor = _mock_conn(fetchone_return=None)
+    conn, cursor = _mock_conn(fetchone_return={"inserted": True})
     job = {
         "title": "Lab Assistant", "department": "Chemistry",
         "type": "part-time", "salary": "£12/hr",
@@ -25,13 +25,29 @@ def test_upsert_new_job_returns_true():
 
 
 def test_upsert_existing_job_returns_false():
-    conn, cursor = _mock_conn(fetchone_return={"id": 1, "placed_on": None})
+    conn, cursor = _mock_conn(fetchone_return={"inserted": False})
     job = {
         "title": "Lab Assistant", "department": "Chemistry",
         "type": "part-time", "url": "https://bath.ac.uk/job/1",
     }
     result = db.upsert_job(conn, job, "2026-06-01T10:00:00")
     assert result is False
+
+
+def test_upsert_is_one_statement_that_refreshes_and_keeps_placed_on():
+    """No SELECT-then-INSERT race; deadlines refresh; a failed placed_on fetch doesn't blank it."""
+    conn, cursor = _mock_conn(fetchone_return={"inserted": False})
+    job = {
+        "title": "Lab Assistant", "department": "Chemistry", "type": "part-time",
+        "deadline": "2026-09-30", "placed_on": None, "url": "https://bath.ac.uk/job/1",
+    }
+    db.upsert_job(conn, job, "2026-06-01T10:00:00")
+    assert cursor.execute.call_count == 1
+    sql = " ".join(cursor.execute.call_args[0][0].split())
+    assert "ON CONFLICT (url) DO UPDATE" in sql
+    assert "deadline = EXCLUDED.deadline" in sql
+    assert "placed_on = COALESCE(EXCLUDED.placed_on, jobs.placed_on)" in sql
+    assert "2026-09-30" in cursor.execute.call_args[0][1]
 
 
 def test_get_jobs_queries_correct_type():

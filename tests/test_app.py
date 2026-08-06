@@ -58,3 +58,24 @@ def test_download_csv_full_time(client, monkeypatch):
 def test_download_csv_invalid_type(client):
     resp = client.get("/download/invalid")
     assert resp.status_code == 400
+
+
+def test_fmt_time_formats_datetime_from_postgres():
+    """psycopg2 returns TIMESTAMP as datetime; it must not fall through raw."""
+    from datetime import datetime
+    assert flask_app._fmt_time(datetime(2026, 8, 6, 11, 52, 26, 774157)) == "06 Aug 2026, 12:52"  # BST
+    assert flask_app._fmt_time(datetime(2026, 1, 6, 9, 30)) == "06 Jan 2026, 09:30"  # GMT
+    assert flask_app._fmt_time(None) == "—"
+
+
+def test_run_scraper_rejects_rapid_repeat_presses(client, monkeypatch):
+    """The public button must not fork a scraper process per press."""
+    from datetime import datetime, timedelta
+    _patch_db(monkeypatch, last_run={"run_at": datetime.utcnow() - timedelta(seconds=5)})
+    monkeypatch.setattr(db, "count_active_jobs", lambda conn: 0)
+
+    with patch("app.subprocess.run") as spawned:
+        resp = client.post("/run-scraper")
+
+    assert resp.status_code == 302
+    spawned.assert_not_called()

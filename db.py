@@ -67,26 +67,28 @@ def _normalize_url(url):
 def upsert_job(conn, job, now):
     url = _normalize_url(job.get("url"))
     cur = conn.cursor()
-    cur.execute("SELECT id, placed_on FROM jobs WHERE url = %s", (url,))
-    existing = cur.fetchone()
-    if existing:
-        placed_on = job.get("placed_on") or (existing["placed_on"] if existing else None)
-        cur.execute(
-            "UPDATE jobs SET last_seen = %s, active = TRUE, placed_on = %s WHERE url = %s",
-            (now, placed_on, url),
-        )
-        return False
+    # One statement, so concurrent scrapes can't both pass a SELECT then collide
+    # on the url index. Refreshes mutable fields so extended deadlines don't stick.
     cur.execute(
         """INSERT INTO jobs
                (title, department, type, salary, deadline, placed_on, url, first_seen, last_seen, active)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)""",
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+           ON CONFLICT (url) DO UPDATE SET
+               title      = EXCLUDED.title,
+               department = EXCLUDED.department,
+               type       = EXCLUDED.type,
+               deadline   = EXCLUDED.deadline,
+               placed_on  = COALESCE(EXCLUDED.placed_on, jobs.placed_on),
+               last_seen  = EXCLUDED.last_seen,
+               active     = TRUE
+           RETURNING (xmax = 0) AS inserted""",  # xmax = 0 only on a real insert
         (
             job.get("title"), job.get("department"), job.get("type"),
             job.get("salary"), job.get("deadline"), job.get("placed_on"),
             url, now, now,
         ),
     )
-    return True
+    return cur.fetchone()["inserted"]
 
 
 def mark_stale(conn, cutoff):

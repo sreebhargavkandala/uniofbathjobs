@@ -78,3 +78,23 @@ def test_scrape_jobs_returns_empty_on_blank_page():
     with patch("scraper.requests.get", return_value=_mock_response("<html><body></body></html>")):
         jobs = scraper.scrape_jobs()
     assert jobs == []
+
+
+def test_run_fails_loudly_when_zero_jobs_scraped():
+    """A layout change must log an error and exit non-zero, never 'success'."""
+    logged = {}
+
+    def fake_log_run(conn, run_at, jobs_found, status, error_msg=None):
+        logged["status"] = status
+        logged["error_msg"] = error_msg
+
+    with patch("scraper.scrape_jobs", return_value=[]), \
+         patch.object(scraper.db, "init_db", lambda: None), \
+         patch.object(scraper.db, "log_run", fake_log_run), \
+         patch.object(scraper.db, "get_conn", MagicMock()), \
+         pytest.raises(SystemExit) as exc:
+        scraper.run()
+
+    assert exc.value.code == 1
+    assert logged["status"] == "error"
+    assert "0 jobs" in logged["error_msg"]

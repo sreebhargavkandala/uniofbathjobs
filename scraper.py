@@ -92,6 +92,10 @@ def run():
 
     try:
         jobs = scrape_jobs()
+        # Zero means markup changed or we got blocked; without this it logs
+        # success and mark_stale() empties the board 48h later.
+        if not jobs:
+            raise RuntimeError("scraped 0 jobs — page layout may have changed")
         with ThreadPoolExecutor(max_workers=10) as executor:
             future_to_idx = {executor.submit(fetch_placed_on, job["url"]): i
                              for i, job in enumerate(jobs)}
